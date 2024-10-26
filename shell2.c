@@ -2,6 +2,9 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 int STRING_LEN = 1000;
 int ARGV_SIZE= 1000;
@@ -11,19 +14,6 @@ void makeStringEmpty(char* str) {
 	str[0] = '\0';
 }
 
-
-void deepcopy(char* array[], int index, char* str) {
-	printf("copying %s to array[%d]\n", str, index);
-
-	char* temp = (char*)malloc(strlen(str) * sizeof(char));
-	if (temp == NULL) {
-		printf("deepcopy() failed to malloc\n");
-		exit(1);
-	}
-
-	strcpy(temp, str);
-	array[index] = temp;
-}
 
 
 //fills argv with split str
@@ -40,7 +30,7 @@ int split(char** argv, char* str) {
 
 	//if it's all spaces, then return
 	if (startIndex == -1) {
-		return;
+		return 0;
 	}
 
 	int argvSize = 0;
@@ -83,37 +73,66 @@ int split(char** argv, char* str) {
 		printf("-%s-\n", argv[i]);
 
 
-	return size;
+	return argvSize;
 
 }
 
 
 
-void callLs(char** argv) {
-	return;
-}
 
 
-void parseCommand(char** argv) {
-	//ls
-	if (strcmp(argv[0], "ls") == 0) {
-		printf("executing ls...");
-		callLs(argv[0]);
+
+
+
+
+void parseCommand(char** argv, int argvSize) {
+	//first check for cd
+	if (strcmp(argv[0], "cd") == 0) {
+		printf("executing cd...\n");
+
+		if (argvSize != 2) {
+			perror("cd takes one arg\n");
+			return;
+		}
+		
+		//change the cwd to argv[1]
+		if (chdir(argv[1]) != 0) {
+    	    perror("chdir failed\n");
+    	    return;
+		}
+
 		return;
 	}
-	//cd
-	if (strcmp(argv[0], "ls") == 0) {
-		printf("executing cd...");
-		return;
-	}
+
+	//just fork into the the process specified
+	pid_t pid = fork();
+
+    if (pid < 0) {
+        // Fork failed
+        perror("fork failed");
+        exit(1);
+    } else if (pid == 0) {
+        // Child process
+        execvp(argv[0], argv); // Replace child process with argv
+        
+        // execvp only returns on failure
+        perror("exec failed");
+        exit(1);
+    } else {
+        // Parent process
+        wait(NULL); // Wait for the child to finish
+        printf("Child process finished.\n");
+    }
 }
 
 
 int main() {
-	printf("Welcome to SimpleShell!\nThis is a minimalistic unix-like shell. Type `help` for a list of commands.\n>");
+	printf("Welcome to SimpleShell!\nThis is a simple unix-like shell. Type `help` for a list of commands.\n>");
 	char* input = (char*)malloc(STRING_LEN * sizeof(char));
 
 	fgets(input, STRING_LEN, stdin);
+
+	//removes all `\n` and `\t`
 	for (int i=0; i<strlen(input); ++i) {
 		if (input[i] == '\n' || input[i] == '\t')
 			input[i] = '\0';
@@ -122,23 +141,15 @@ int main() {
 	printf("%s\n", input);
 
 	
-	for (int i=0; i<STRING_LEN; ++i) {
-		printf("%c\n", input[i]);
-		if (input[i] == '\t')
-			printf("Tab!!");
-
-		if (input[i] == '\0') {
-			printf("null!\n");
-			break;
-		}
-	}
 
 	char** argv = (char**)malloc(ARGV_SIZE * sizeof(char**));
 
-	split the input into a vector of strings
+	// split the input into a vector of strings
 	int argvSize = split(argv, input);
 
-	parseCommand(argv);
+	printf("%s\n", argv[0]);
+
+	parseCommand(argv, argvSize);
 
 
 
