@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <stdbool.h>
 
 int STRING_LEN = 1000;
 int ARGV_SIZE= 1000;
@@ -69,9 +70,6 @@ int split(char** argv, char* str) {
 	}
 
 
-	for (int i=0; i<argvSize; ++i)
-		printf("-%s-\n", argv[i]);
-
 
 	return argvSize;
 
@@ -127,31 +125,31 @@ void parseCommand(char** argv, int argvSize) {
 
 
 int main() {
-	printf("Welcome to SimpleShell!\nThis is a simple unix-like shell. Type `help` for a list of commands.\n>");
+	printf("Welcome to SimpleShell!\nThis is a simple unix-like shell. Type `help` for a list of commands.\n");
 	char* input = (char*)malloc(STRING_LEN * sizeof(char));
 
-	fgets(input, STRING_LEN, stdin);
 
-	//removes all `\n` and `\t`
-	for (int i=0; i<strlen(input); ++i) {
-		if (input[i] == '\n' || input[i] == '\t')
-			input[i] = '\0';
-	}
-
-	printf("%s\n", input);
-
+	do {
+		printf(">");
 	
+		fgets(input, STRING_LEN, stdin);
 
-	char** argv = (char**)malloc(ARGV_SIZE * sizeof(char**));
+		//removes all `\n` and `\t`
+		for (int i=0; i<strlen(input); ++i) {
+			if (input[i] == '\n' || input[i] == '\t')
+				input[i] = '\0';
+		}
 
-	// split the input into a vector of strings
-	int argvSize = split(argv, input);
+		printf("%s\n", input);
 
-	printf("%s\n", argv[0]);
+		char** argv = (char**)malloc(ARGV_SIZE * sizeof(char**));
 
-	parseCommand(argv, argvSize);
+		// split the input into a vector of strings
+		int argvSize = split(argv, input);
 
+		parseCommand(argv, argvSize);
 
+	} while (true);
 
 
 	
