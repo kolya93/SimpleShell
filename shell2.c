@@ -77,19 +77,120 @@ int split(char** argv, char* str) {
 
 
 
+void forkWriterReader(char** argvWriter, int argvSizeWriter, char** argvReader, int argvSizeReader) {
+	int pipefd[2];
+    pid_t pid1, pid2;
+
+    // Create a pipe
+    if (pipe(pipefd) == -1) {
+        perror("pipe");
+        exit(EXIT_FAILURE);
+    }
+
+    // Fork the first child process (for cat)
+    pid1 = fork();
+    if (pid1 == -1) {
+        perror("fork");
+        exit(EXIT_FAILURE);
+    }
+
+    if (pid1 == 0) { // Child process 1 (cat)
+        // Close the write end of the pipe (no need to write to it)
+        close(pipefd[0]);
+        
+        // Redirect stdout to the pipe (write end)
+        dup2(pipefd[1], STDOUT_FILENO);
+        close(pipefd[1]);
+
+        // Execute "cat" command
+        execvp(argvWriter[0], argvWriter);
+        perror("execlp writer");
+        exit(EXIT_FAILURE);
+    }
+
+    // Fork the second child process (for grep)
+    pid2 = fork();
+    if (pid2 == -1) {
+        perror("fork");
+        exit(EXIT_FAILURE);
+    }
+
+    if (pid2 == 0) { // Child process 2 (grep)
+        // Close the read end of the pipe (no need to read from it)
+        close(pipefd[1]);
+
+        // Redirect stdin to the pipe (read end)
+        dup2(pipefd[0], STDIN_FILENO);
+        close(pipefd[0]);
+
+        // Execute "grep" command
+        execvp(argvReader[0], argvReader);
+        perror("execlp reader");
+        exit(EXIT_FAILURE);
+    }
+
+    // Parent process closes both ends of the pipe
+    close(pipefd[0]);
+    close(pipefd[1]);
+
+    // Wait for both child processes to finish
+    waitpid(pid1, NULL, 0);
+    waitpid(pid2, NULL, 0);
+
+}
 
 
+
+
+
+void executePipe(char** argv, int argvSize) {
+
+	// printf("executing pipe...\n");
+	for (int i=0; i<argvSize; ++i) {
+		if (strcmp(argv[i], "|") == 0) {
+
+			char* writer[ARGV_SIZE];
+			char* reader[ARGV_SIZE];
+
+			//copy the first half of the pipe command into writer
+			for (int j=0; j<i; ++j) {
+				writer[j] = argv[j];
+			}
+
+			//copy the second half of pipe command to reader
+			for (int j=i+1; j<argvSize; ++j) {
+				reader[j - (i + 1)] = argv[j];
+			}
+
+			forkWriterReader(writer, i, reader, argvSize - i);
+			return;
+		}
+	}
+
+	printf("Sorry, for pipe commands, the `|` must be in between spaces.\n");
+	return;
+}
 
 
 
 
 void parseCommand(char** argv, int argvSize) {
-	//first check for cd
+
+	//check if it's a pipe
+	for (int i=0; i<argvSize; ++i) {
+		for (int j=0; argv[i][j] != '\0'; ++j) {
+			if (argv[i][j] == '|') {
+				executePipe(argv, argvSize);
+				return;
+			}
+		}
+	}
+
+	//check for cd
 	if (strcmp(argv[0], "cd") == 0) {
-		printf("executing cd...\n");
 
 		if (argvSize != 2) {
-			perror("cd takes one arg\n");
+			printf("cd takes one arg\n");
 			return;
 		}
 		
@@ -100,6 +201,19 @@ void parseCommand(char** argv, int argvSize) {
 		}
 
 		return;
+	}
+
+
+	//check if it's a help command
+	if (strcmp(argv[0], "help") == 0) {
+		printf("This is a simple unix-like shell written in c for my RCOS project. It is meant for educational purposes. You can execute all the usual usr/bin binaries (ie `ls -l`). Also you can pipe two processes with `(process1) | (process2)` (but make sure the `|` is between two spaces). Type `end` to close the shell. And use `man` for everything else.\n");
+		return;
+	
+	}
+
+	//check if it's an end
+	if (strcmp(argv[0], "end") == 0) {
+		exit(0);
 	}
 
 	//just fork into the the process specified
@@ -119,7 +233,6 @@ void parseCommand(char** argv, int argvSize) {
     } else {
         // Parent process
         wait(NULL); // Wait for the child to finish
-        printf("Child process finished.\n");
     }
 }
 
@@ -127,6 +240,7 @@ void parseCommand(char** argv, int argvSize) {
 int main() {
 	printf("Welcome to SimpleShell!\nThis is a simple unix-like shell. Type `help` for a list of commands.\n");
 	char* input = (char*)malloc(STRING_LEN * sizeof(char));
+
 
 
 	do {
@@ -140,14 +254,17 @@ int main() {
 				input[i] = '\0';
 		}
 
-		printf("%s\n", input);
-
 		char** argv = (char**)malloc(ARGV_SIZE * sizeof(char**));
 
 		// split the input into a vector of strings
 		int argvSize = split(argv, input);
 
 		parseCommand(argv, argvSize);
+
+		//free everything
+		for (int i=0; i<argvSize; ++i) {
+			free(argv[i]);
+		}
 
 	} while (true);
 
