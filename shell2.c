@@ -6,6 +6,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <stdbool.h>
+#include <fcntl.h>
 
 int STRING_LEN = 1000;
 int ARGV_SIZE= 1000;
@@ -125,7 +126,7 @@ void forkWriterReader(char** argvWriter, int argvSizeWriter, char** argvReader, 
 
         // Execute "grep" command
         execvp(argvReader[0], argvReader);
-        perror("execlp reader");
+        perror("execvp reader");
         exit(EXIT_FAILURE);
     }
 
@@ -174,6 +175,82 @@ void executePipe(char** argv, int argvSize) {
 
 
 
+
+
+void forkOutputRedirect(char** argvWriter, int argvSizeWriter, char** file) {
+	pid_t pid = fork();  // Create a child process
+
+    if (pid < 0) {
+        // Fork failed
+        perror("fork failed");
+        return;
+    }
+
+    if (pid == 0) {
+        // Child process
+
+        // Open the file for writing (create if it doesn't exist)
+        int fd = open(file[0], O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (fd < 0) {
+            printf("Error opening %s\n", file[0]);
+            return;
+        }
+
+        // Redirect stdout (file descriptor 1) to the file (fd)
+        dup2(fd, STDOUT_FILENO);  // STDOUT_FILENO is 1
+
+        // Close the file descriptor (it’s already duplicated to stdout)
+        close(fd);
+
+        // Exec
+        execvp(argvWriter[0], argvWriter);
+
+        // If execlp() fails
+        perror("execlp failed");
+        return;
+    }
+    else {
+        // Parent process
+        wait(NULL);  // Wait for the child to finish
+    }
+
+}
+
+
+
+
+void executeOutputRedirection(char** argv, int argvSize) {
+
+	// printf("executing pipe...\n");
+	for (int i=0; i<argvSize; ++i) {
+		if (strcmp(argv[i], ">") == 0) {
+
+			char* writer[ARGV_SIZE];
+			char* file[ARGV_SIZE];
+
+			//copy the first half of the redirect command into writer
+			for (int j=0; j<i; ++j) {
+				writer[j] = argv[j];
+			}
+
+			//copy the second half of redirect command to file
+			for (int j=i+1; j<argvSize; ++j) {
+				file[j - (i + 1)] = argv[j];
+			}
+
+			forkOutputRedirect(writer, i, file);
+			return;
+		}
+	}
+
+	printf("Sorry, for redirecting output to files, the `>` must be in between spaces.\n");
+	return;
+}
+
+
+
+
+
 void parseCommand(char** argv, int argvSize) {
 
 	//check if it's a pipe
@@ -181,6 +258,16 @@ void parseCommand(char** argv, int argvSize) {
 		for (int j=0; argv[i][j] != '\0'; ++j) {
 			if (argv[i][j] == '|') {
 				executePipe(argv, argvSize);
+				return;
+			}
+		}
+	}
+
+	//check if it's output redirection
+	for (int i=0; i<argvSize; ++i) {
+		for (int j=0; argv[i][j] != '\0'; ++j) {
+			if (argv[i][j] == '>') {
+				executeOutputRedirection(argv, argvSize);
 				return;
 			}
 		}
