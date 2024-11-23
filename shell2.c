@@ -144,37 +144,137 @@ void forkWriterReader(char** argvWriter, int argvSizeWriter, char** argvReader, 
 
 
 
-void executePipe(char** argv, int argvSize) {
+// void executePipe(char** argv, int argvSize) {
 
-	// printf("executing pipe...\n");
-	for (int i=0; i<argvSize; ++i) {
-		if (strcmp(argv[i], "|") == 0) {
+// 	for (int i=0; i<argvSize; ++i) 
+// 		printf("=%s=\n", argv[i]);
 
-			char* writer[ARGV_SIZE];
-			char* reader[ARGV_SIZE];
+// 	// printf("executing pipe...\n");
+// 	for (int i=0; i<argvSize; ++i) {
+// 		if (strcmp(argv[i], "|") == 0) {
 
-			//copy the first half of the pipe command into writer
-			for (int j=0; j<i; ++j) {
-				writer[j] = argv[j];
-			}
+// 			char* writer[ARGV_SIZE];
+// 			char* reader[ARGV_SIZE];
 
-			//copy the second half of pipe command to reader
-			for (int j=i+1; j<argvSize; ++j) {
-				reader[j - (i + 1)] = argv[j];
-			}
+// 			//copy the first half of the pipe command into writer
+// 			for (int j=0; j<i; ++j) {
+// 				writer[j] = argv[j];
+// 			}
 
-			forkWriterReader(writer, i, reader, argvSize - i);
-			return;
-		}
-	}
+// 			//copy the second half of pipe command to reader
+// 			for (int j=i+1; j<argvSize; ++j) {
+// 				reader[j - (i + 1)] = argv[j];
+// 			}
 
-	printf("Sorry, for pipe commands, the `|` must be in between spaces.\n");
-	return;
+// 			forkWriterReader(writer, i, reader, argvSize - i);
+// 			return;
+// 		}
+// 	}
+
+// 	printf("Sorry, for pipe commands, the `|` must be in between spaces.\n");
+// 	return;
+// }
+
+
+
+void execute_command(char *cmd, char *const argv[], int input_fd, int output_fd) {
+    if (input_fd != 0) {  // If there's an input pipe, redirect stdin
+        if (dup2(input_fd, STDIN_FILENO) == -1) {
+            perror("dup2 input");
+            exit(1);
+        }
+    }
+    if (output_fd != 1) {  // If there's an output pipe, redirect stdout
+        if (dup2(output_fd, STDOUT_FILENO) == -1) {
+            perror("dup2 output");
+            exit(1);
+        }
+    }
+
+    // Execute the command
+    execvp(cmd, argv);
+    perror("execvp failed");  // If execvp fails
+    exit(1);
 }
 
 
 
+void executePipe(char** argv, int argvSize) {
 
+	char** componentArray[100]; //this is an array of each of the components of the pipeline
+
+	for (int i=0; i<100; ++i) {
+		componentArray[i] = malloc(100 * sizeof(char*));
+		
+	}
+
+	int componentIndex = 0;
+	int componentArraySize = 0;
+
+	int indexOfLastPipe = 0;
+
+	for (int i=0; i<argvSize; ++i) {
+
+		if (strcmp(argv[i], "|") == 0) {
+			++componentArraySize;
+			indexOfLastPipe = i + 1;
+			++componentIndex;
+
+			continue;
+		}
+
+		componentArray[componentIndex][i - indexOfLastPipe] = argv[i];
+	}
+	++componentArraySize;
+
+	int num_commands = componentArraySize;
+
+	int pipefds[2 * (num_commands - 1)]; // Create enough pipes for the chain of commands
+
+    // Create pipes for each pair of commands
+    for (int i = 0; i < num_commands - 1; i++) {
+        if (pipe(pipefds + i * 2) == -1) {
+            perror("pipe");
+            exit(1);
+        }
+    }
+
+    // Create processes and set up pipes
+    for (int i = 0; i < num_commands; i++) {
+        pid_t pid = fork();
+
+        if (pid == -1) {
+            perror("fork");
+            exit(1);
+        }
+
+        if (pid == 0) {
+            // Determine input and output for each command
+            int input_fd = (i == 0) ? 0 : pipefds[(i - 1) * 2];  // Input from previous pipe
+            int output_fd = (i == num_commands - 1) ? 1 : pipefds[i * 2 + 1];  // Output to next pipe
+
+            // Close all unused pipe ends
+            for (int j = 0; j < 2 * (num_commands - 1); j++) {
+                if (j != (i - 1) * 2 && j != i * 2 + 1) {
+                    close(pipefds[j]);
+                }
+            }
+
+            // Execute the command
+            execute_command(componentArray[i][0], componentArray[i], input_fd, output_fd);
+        }
+    }
+
+    // Parent process: Close all pipe file descriptors and wait for children
+    for (int i = 0; i < 2 * (num_commands - 1); i++) {
+        close(pipefds[i]);
+    }
+
+    for (int i = 0; i < num_commands; i++) {
+        wait(NULL);  // Wait for each child to finish
+    }
+
+}
 
 
 void forkOutputRedirect(char** argvWriter, int argvSizeWriter, char** file) {
