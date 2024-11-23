@@ -1,0 +1,12 @@
+Backgrounding Notes
+
+command + z puts the current running process in the background. It will give the number of the background process, like 1 if it's the first process put into the background, 2 if it's the second, etc. This number acts like an id.
+
+'fg' brings the process which was last put in the background into the foreground. 
+
+'fg 1' brings the process whose "id" is 1.
+
+To implement this into my shell, I'd like to just have a type-and-enter command instead of command+z. Something like 'makebg' (make background).
+
+When makebg is called, the current process' stdout will somehow just go nowhere instead of into the shell. 
+Then, we can keep track of these background processes in some container, and when user enters 'fg [x]' we reestablish the connection between background process x's stdout and the terminal character output.
