@@ -14,6 +14,9 @@ int ARGV_SIZE= 1000;
 
 int childPID;
 
+int pidsIndex = 0;
+int pids[10000];
+
 
 void makeStringEmpty(char* str) {
 	str[0] = '\0';
@@ -84,21 +87,23 @@ int split(char** argv, char* str) {
 
 
 // Signal handler function for SIGTSTP
+/*
+This only works if the user suspends one process in their session.
+I'll probably need to rewrite it so that it doesn't use signals. Maybe it'll 
+use the tab key as the signal for suspending?
+*/
 void sigtstp_handler(int sig) {
     printf("\nCtrl+Z (SIGTSTP) detected. The process has been suspended.\n");
     // You can perform additional actions here if needed
     kill(childPID, SIGSTOP);
 
+    pids[pidsIndex] = childPID;
+    ++pidsIndex;
 
-    int x;
 
-    while (1) {
-    	scanf("%d", &x);
-    	if (x == 1)
-    		break;
-    }
+    main2();
 
-    kill(childPID, SIGCONT);
+    
 
 
 }
@@ -388,6 +393,15 @@ void parseCommand(char** argv, int argvSize) {
 	}
 
 
+	if (strcmp(argv[0], "bg") == 0) {
+		//print all contents of pids
+		for (int i=0; i<pidsIndex; ++i) {
+			printf("%d\n", pids[i]);
+		}
+		return;
+	}
+
+
 	//check if it's a help command
 	if (strcmp(argv[0], "help") == 0) {
 		printf("This is a simple unix-like shell written in c for my RCOS project. It is meant for educational purposes. You can execute all the usual usr/bin binaries (ie `ls -l`). Also you can pipe two processes with `(process1) | (process2)` (but make sure the `|` is between two spaces). Type `end` to close the shell. And use `man` for everything else.\n");
@@ -417,9 +431,46 @@ void parseCommand(char** argv, int argvSize) {
     } else {
         // Parent process
         childPID = pid;
+        printf("Executing... pid: %d\n", childPID);
         wait(NULL); // Wait for the child to finish
     }
 }
+
+
+
+
+void main2() {
+	char* input = (char*)malloc(STRING_LEN * sizeof(char));
+
+	do {
+		printf(">");
+	
+		fgets(input, STRING_LEN, stdin);
+
+		//removes all `\n` and `\t`
+		for (int i=0; i<strlen(input); ++i) {
+			if (input[i] == '\n' || input[i] == '\t')
+				input[i] = '\0';
+		}
+
+		char** argv = (char**)malloc(ARGV_SIZE * sizeof(char**));
+
+		// split the input into a vector of strings
+		int argvSize = split(argv, input);
+
+		parseCommand(argv, argvSize);
+
+		//free everything
+		for (int i=0; i<argvSize; ++i) {
+			free(argv[i]);
+		}
+
+	} while (true);
+
+}
+
+
+
 
 
 int main() {
@@ -459,10 +510,6 @@ int main() {
 		}
 
 	} while (true);
-
-
-	
-
 
 
 }
