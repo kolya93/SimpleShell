@@ -154,38 +154,6 @@ void forkWriterReader(char** argvWriter, int argvSizeWriter, char** argvReader, 
 
 
 
-// void executePipe(char** argv, int argvSize) {
-
-// 	for (int i=0; i<argvSize; ++i) 
-// 		printf("=%s=\n", argv[i]);
-
-// 	// printf("executing pipe...\n");
-// 	for (int i=0; i<argvSize; ++i) {
-// 		if (strcmp(argv[i], "|") == 0) {
-
-// 			char* writer[ARGV_SIZE];
-// 			char* reader[ARGV_SIZE];
-
-// 			//copy the first half of the pipe command into writer
-// 			for (int j=0; j<i; ++j) {
-// 				writer[j] = argv[j];
-// 			}
-
-// 			//copy the second half of pipe command to reader
-// 			for (int j=i+1; j<argvSize; ++j) {
-// 				reader[j - (i + 1)] = argv[j];
-// 			}
-
-// 			forkWriterReader(writer, i, reader, argvSize - i);
-// 			return;
-// 		}
-// 	}
-
-// 	printf("Sorry, for pipe commands, the `|` must be in between spaces.\n");
-// 	return;
-// }
-
-
 
 void execute_command(char *cmd, char *const argv[], int input_fd, int output_fd) {
     if (input_fd != 0) {  // If there's an input pipe, redirect stdin
@@ -358,6 +326,78 @@ void executeOutputRedirection(char** argv, int argvSize) {
 }
 
 
+void forkInputRedirect(char** argvWriter, int argvSizeWriter, char** file) {
+	pid_t pid = fork();  // Create a child process
+
+    if (pid < 0) {
+        // Fork failed
+        perror(RED "fork failed" RESET);
+        return;
+    }
+
+    if (pid == 0) {
+        // Child process
+
+        // Open the file for writing (create if it doesn't exist)
+        int fd = open(file[0], O_RDONLY);
+        if (fd < 0) {
+            printf(RED "Error opening %s\n RESET", file[0]);
+            return;
+        }
+
+        // Redirect stdout (file descriptor 1) to the file (fd)
+        if (dup2(fd, STDIN_FILENO) == -1) {
+    	    perror("Failed to redirect input");
+    	    close(fd);
+    	    return;
+    	}
+
+        // Close the file descriptor (it’s already duplicated to stdout)
+        close(fd);
+
+        // Exec
+        execvp(argvWriter[0], argvWriter);
+
+        // If execlp() fails
+        perror(RED "execlp failed" RESET);
+        return;
+    }
+    else {
+        // Parent process
+        wait(NULL);  // Wait for the child to finish
+    }
+
+}
+
+
+
+void executeInputRedirection(char** argv, int argvSize) {
+	for (int i=0; i<argvSize; ++i) {
+		if (strcmp(argv[i], "<") == 0) {
+
+			char* reader[ARGV_SIZE];
+			char* file[ARGV_SIZE];
+
+			//copy the first half of the redirect command into reader
+			for (int j=0; j<i; ++j) {
+				reader[j] = argv[j];
+			}
+
+			//copy the second half of redirect command to file
+			for (int j=i+1; j<argvSize; ++j) {
+				file[j - (i + 1)] = argv[j];
+			}
+
+			forkInputRedirect(reader, i, file);
+			return;
+		}
+	}
+
+	printf(RED "Sorry, for redirecting output to files, the `>` must be in between spaces.\n" RESET);
+	return;
+}
+
+
 
 
 
@@ -378,6 +418,16 @@ void parseCommand(char** argv, int argvSize) {
 		for (int j=0; argv[i][j] != '\0'; ++j) {
 			if (argv[i][j] == '>') {
 				executeOutputRedirection(argv, argvSize);
+				return;
+			}
+		}
+	}
+
+	//check if it's input redirection
+	for (int i=0; i<argvSize; ++i) {
+		for (int j=0; argv[i][j] != '\0'; ++j) {
+			if (argv[i][j] == '<') {
+				executeInputRedirection(argv, argvSize);
 				return;
 			}
 		}
@@ -440,7 +490,7 @@ int main() {
 
 
 	do {
-		printf(">");
+		printf(BLUE ">" RESET);
 	
 		fgets(input, STRING_LEN, stdin);
 
@@ -454,6 +504,12 @@ int main() {
 
 		// split the input into a vector of strings
 		int argvSize = split(argv, input);
+
+		if (argvSize == 0) {
+			printf(RED "empty string is not a valid command\n" RESET); 
+			continue;
+		}
+
 
 		parseCommand(argv, argvSize);
 
