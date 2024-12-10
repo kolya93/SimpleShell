@@ -1,0 +1,24 @@
+Backgrounding issue
+-------------------
+
+I can't implement backgrounding with set_raw_mode(), because 
+if I run a process that takes standard input, it won't read 
+it, because the shell is reading it to make sure the user
+inputted the suspend signal.
+
+I therefore have to use the sigtstp_handler() approach I had in my 
+last commit, but there's a weird bug. It runs perfectly the first
+time I suspend a process, but then it never responds to ctrl + z
+again. It just prints [^Z.
+
+
+
+I tried resetting the signal of the process, but same issue. 
+It works fine when it doesn't kill() the child process. Attached is the code of 
+the test I ran. It correctly kill()s the child process, and then jumps to main2() 
+(which just runs the main shell loop), where sigtstp_handler is reset. And it
+still doesn't work.
+
+I'm at my wits end...
+
+It looks like I can't get backgrounding working.

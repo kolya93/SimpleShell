@@ -18,6 +18,10 @@ int pidsIndex = 0;
 int pids[10000];
 
 
+
+
+void main2(void);
+
 void makeStringEmpty(char* str) {
 	str[0] = '\0';
 }
@@ -94,15 +98,11 @@ use the tab key as the signal for suspending?
 */
 void sigtstp_handler(int sig) {
     printf("\nCtrl+Z (SIGTSTP) detected. The process has been suspended.\n");
-    // You can perform additional actions here if needed
+    
+    printf("pid: %d\n", childPID);
     kill(childPID, SIGSTOP);
-
-    pids[pidsIndex] = childPID;
-    ++pidsIndex;
-
-
+    
     main2();
-
     
 
 
@@ -441,6 +441,12 @@ void parseCommand(char** argv, int argvSize) {
 
 void main2() {
 	char* input = (char*)malloc(STRING_LEN * sizeof(char));
+
+	 // Register the signal handler for SIGTSTP (Ctrl+Z)
+    if (signal(SIGTSTP, sigtstp_handler) == SIG_ERR) {
+        perror("Error setting signal handler");
+        exit(1);
+    }
 
 	do {
 		printf(">");
