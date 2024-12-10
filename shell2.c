@@ -12,6 +12,9 @@ int STRING_LEN = 1000;
 int ARGV_SIZE= 1000;
 
 
+int childPID;
+
+
 void makeStringEmpty(char* str) {
 	str[0] = '\0';
 }
@@ -78,6 +81,33 @@ int split(char** argv, char* str) {
 
 
 
+
+
+// Signal handler function for SIGTSTP
+void sigtstp_handler(int sig) {
+    printf("\nCtrl+Z (SIGTSTP) detected. The process has been suspended.\n");
+    // You can perform additional actions here if needed
+    kill(childPID, SIGSTOP);
+
+
+    int x;
+
+    while (1) {
+    	scanf("%d", &x);
+    	if (x == 1)
+    		break;
+    }
+
+    kill(childPID, SIGCONT);
+
+
+}
+
+
+
+
+
+
 void forkWriterReader(char** argvWriter, int argvSizeWriter, char** argvReader, int argvSizeReader) {
 	int pipefd[2];
     pid_t pid1, pid2;
@@ -88,14 +118,14 @@ void forkWriterReader(char** argvWriter, int argvSizeWriter, char** argvReader, 
         exit(EXIT_FAILURE);
     }
 
-    // Fork the first child process (for cat)
+    // Fork the first child process 
     pid1 = fork();
     if (pid1 == -1) {
         perror("fork");
         exit(EXIT_FAILURE);
     }
 
-    if (pid1 == 0) { // Child process 1 (cat)
+    if (pid1 == 0) { // Child process 1 
         // Close the write end of the pipe (no need to write to it)
         close(pipefd[0]);
         
@@ -103,20 +133,20 @@ void forkWriterReader(char** argvWriter, int argvSizeWriter, char** argvReader, 
         dup2(pipefd[1], STDOUT_FILENO);
         close(pipefd[1]);
 
-        // Execute "cat" command
+        // Execute
         execvp(argvWriter[0], argvWriter);
         perror("execlp writer");
         exit(EXIT_FAILURE);
     }
 
-    // Fork the second child process (for grep)
+    // Fork the second child process
     pid2 = fork();
     if (pid2 == -1) {
         perror("fork");
         exit(EXIT_FAILURE);
     }
 
-    if (pid2 == 0) { // Child process 2 (grep)
+    if (pid2 == 0) { // Child process 2
         // Close the read end of the pipe (no need to read from it)
         close(pipefd[1]);
 
@@ -124,7 +154,7 @@ void forkWriterReader(char** argvWriter, int argvSizeWriter, char** argvReader, 
         dup2(pipefd[0], STDIN_FILENO);
         close(pipefd[0]);
 
-        // Execute "grep" command
+        // Execute
         execvp(argvReader[0], argvReader);
         perror("execvp reader");
         exit(EXIT_FAILURE);
@@ -141,39 +171,6 @@ void forkWriterReader(char** argvWriter, int argvSizeWriter, char** argvReader, 
 }
 
 
-
-
-
-// void executePipe(char** argv, int argvSize) {
-
-// 	for (int i=0; i<argvSize; ++i) 
-// 		printf("=%s=\n", argv[i]);
-
-// 	// printf("executing pipe...\n");
-// 	for (int i=0; i<argvSize; ++i) {
-// 		if (strcmp(argv[i], "|") == 0) {
-
-// 			char* writer[ARGV_SIZE];
-// 			char* reader[ARGV_SIZE];
-
-// 			//copy the first half of the pipe command into writer
-// 			for (int j=0; j<i; ++j) {
-// 				writer[j] = argv[j];
-// 			}
-
-// 			//copy the second half of pipe command to reader
-// 			for (int j=i+1; j<argvSize; ++j) {
-// 				reader[j - (i + 1)] = argv[j];
-// 			}
-
-// 			forkWriterReader(writer, i, reader, argvSize - i);
-// 			return;
-// 		}
-// 	}
-
-// 	printf("Sorry, for pipe commands, the `|` must be in between spaces.\n");
-// 	return;
-// }
 
 
 
@@ -419,6 +416,7 @@ void parseCommand(char** argv, int argvSize) {
         exit(1);
     } else {
         // Parent process
+        childPID = pid;
         wait(NULL); // Wait for the child to finish
     }
 }
@@ -427,6 +425,13 @@ void parseCommand(char** argv, int argvSize) {
 int main() {
 	printf("Welcome to SimpleShell!\nThis is a simple unix-like shell. Type `help` for a list of commands.\n");
 	char* input = (char*)malloc(STRING_LEN * sizeof(char));
+
+
+	 // Register the signal handler for SIGTSTP (Ctrl+Z)
+    if (signal(SIGTSTP, sigtstp_handler) == SIG_ERR) {
+        perror("Error setting signal handler");
+        exit(1);
+    }
 
 
 
