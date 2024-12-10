@@ -8,19 +8,19 @@
 #include <stdbool.h>
 #include <fcntl.h>
 
+// Define ANSI color codes
+#define RESET   "\x1b[0m"
+#define RED     "\x1b[31m"
+#define GREEN   "\x1b[32m"
+#define YELLOW  "\x1b[33m"
+#define BLUE    "\x1b[34m"
+#define MAGENTA "\x1b[35m"
+#define CYAN    "\x1b[36m"
+#define WHITE   "\x1b[37m"
+
 int STRING_LEN = 1000;
 int ARGV_SIZE= 1000;
 
-
-int childPID;
-
-int pidsIndex = 0;
-int pids[10000];
-
-
-
-
-void main2(void);
 
 void makeStringEmpty(char* str) {
 	str[0] = '\0';
@@ -88,31 +88,6 @@ int split(char** argv, char* str) {
 
 
 
-
-
-// Signal handler function for SIGTSTP
-/*
-This only works if the user suspends one process in their session.
-I'll probably need to rewrite it so that it doesn't use signals. Maybe it'll 
-use the tab key as the signal for suspending?
-*/
-void sigtstp_handler(int sig) {
-    printf("\nCtrl+Z (SIGTSTP) detected. The process has been suspended.\n");
-    
-    printf("pid: %d\n", childPID);
-    kill(childPID, SIGSTOP);
-    
-    main2();
-    
-
-
-}
-
-
-
-
-
-
 void forkWriterReader(char** argvWriter, int argvSizeWriter, char** argvReader, int argvSizeReader) {
 	int pipefd[2];
     pid_t pid1, pid2;
@@ -123,14 +98,14 @@ void forkWriterReader(char** argvWriter, int argvSizeWriter, char** argvReader, 
         exit(EXIT_FAILURE);
     }
 
-    // Fork the first child process 
+    // Fork the first child process (for cat)
     pid1 = fork();
     if (pid1 == -1) {
         perror("fork");
         exit(EXIT_FAILURE);
     }
 
-    if (pid1 == 0) { // Child process 1 
+    if (pid1 == 0) { // Child process 1 (cat)
         // Close the write end of the pipe (no need to write to it)
         close(pipefd[0]);
         
@@ -138,20 +113,20 @@ void forkWriterReader(char** argvWriter, int argvSizeWriter, char** argvReader, 
         dup2(pipefd[1], STDOUT_FILENO);
         close(pipefd[1]);
 
-        // Execute
+        // Execute "cat" command
         execvp(argvWriter[0], argvWriter);
         perror("execlp writer");
         exit(EXIT_FAILURE);
     }
 
-    // Fork the second child process
+    // Fork the second child process (for grep)
     pid2 = fork();
     if (pid2 == -1) {
         perror("fork");
         exit(EXIT_FAILURE);
     }
 
-    if (pid2 == 0) { // Child process 2
+    if (pid2 == 0) { // Child process 2 (grep)
         // Close the read end of the pipe (no need to read from it)
         close(pipefd[1]);
 
@@ -159,7 +134,7 @@ void forkWriterReader(char** argvWriter, int argvSizeWriter, char** argvReader, 
         dup2(pipefd[0], STDIN_FILENO);
         close(pipefd[0]);
 
-        // Execute
+        // Execute "grep" command
         execvp(argvReader[0], argvReader);
         perror("execvp reader");
         exit(EXIT_FAILURE);
@@ -179,6 +154,39 @@ void forkWriterReader(char** argvWriter, int argvSizeWriter, char** argvReader, 
 
 
 
+// void executePipe(char** argv, int argvSize) {
+
+// 	for (int i=0; i<argvSize; ++i) 
+// 		printf("=%s=\n", argv[i]);
+
+// 	// printf("executing pipe...\n");
+// 	for (int i=0; i<argvSize; ++i) {
+// 		if (strcmp(argv[i], "|") == 0) {
+
+// 			char* writer[ARGV_SIZE];
+// 			char* reader[ARGV_SIZE];
+
+// 			//copy the first half of the pipe command into writer
+// 			for (int j=0; j<i; ++j) {
+// 				writer[j] = argv[j];
+// 			}
+
+// 			//copy the second half of pipe command to reader
+// 			for (int j=i+1; j<argvSize; ++j) {
+// 				reader[j - (i + 1)] = argv[j];
+// 			}
+
+// 			forkWriterReader(writer, i, reader, argvSize - i);
+// 			return;
+// 		}
+// 	}
+
+// 	printf("Sorry, for pipe commands, the `|` must be in between spaces.\n");
+// 	return;
+// }
+
+
+
 void execute_command(char *cmd, char *const argv[], int input_fd, int output_fd) {
     if (input_fd != 0) {  // If there's an input pipe, redirect stdin
         if (dup2(input_fd, STDIN_FILENO) == -1) {
@@ -195,7 +203,7 @@ void execute_command(char *cmd, char *const argv[], int input_fd, int output_fd)
 
     // Execute the command
     execvp(cmd, argv);
-    perror("execvp failed");  // If execvp fails
+    perror(RED "execvp failed" RESET);  // If execvp fails
     exit(1);
 }
 
@@ -284,7 +292,7 @@ void forkOutputRedirect(char** argvWriter, int argvSizeWriter, char** file) {
 
     if (pid < 0) {
         // Fork failed
-        perror("fork failed");
+        perror(RED "fork failed" RESET);
         return;
     }
 
@@ -294,7 +302,7 @@ void forkOutputRedirect(char** argvWriter, int argvSizeWriter, char** file) {
         // Open the file for writing (create if it doesn't exist)
         int fd = open(file[0], O_WRONLY | O_CREAT | O_TRUNC, 0644);
         if (fd < 0) {
-            printf("Error opening %s\n", file[0]);
+            printf(RED "Error opening %s\n RESET", file[0]);
             return;
         }
 
@@ -308,7 +316,7 @@ void forkOutputRedirect(char** argvWriter, int argvSizeWriter, char** file) {
         execvp(argvWriter[0], argvWriter);
 
         // If execlp() fails
-        perror("execlp failed");
+        perror(RED "execlp failed" RESET);
         return;
     }
     else {
@@ -345,7 +353,7 @@ void executeOutputRedirection(char** argv, int argvSize) {
 		}
 	}
 
-	printf("Sorry, for redirecting output to files, the `>` must be in between spaces.\n");
+	printf(RED "Sorry, for redirecting output to files, the `>` must be in between spaces.\n" RESET);
 	return;
 }
 
@@ -393,18 +401,9 @@ void parseCommand(char** argv, int argvSize) {
 	}
 
 
-	if (strcmp(argv[0], "bg") == 0) {
-		//print all contents of pids
-		for (int i=0; i<pidsIndex; ++i) {
-			printf("%d\n", pids[i]);
-		}
-		return;
-	}
-
-
 	//check if it's a help command
 	if (strcmp(argv[0], "help") == 0) {
-		printf("This is a simple unix-like shell written in c for my RCOS project. It is meant for educational purposes. You can execute all the usual usr/bin binaries (ie `ls -l`). Also you can pipe two processes with `(process1) | (process2)` (but make sure the `|` is between two spaces). Type `end` to close the shell. And use `man` for everything else.\n");
+		printf(MAGENTA "This is a simple unix-like shell written in c for my RCOS project. It is meant for educational purposes. You can execute all the usual usr/bin binaries (ie `ls -l`). Also you can pipe two processes with `(process1) | (process2)` (but make sure the `|` is between two spaces). Type `end` to close the shell. And use `man` for everything else.\n" RESET);
 		return;
 	
 	}
@@ -419,77 +418,25 @@ void parseCommand(char** argv, int argvSize) {
 
     if (pid < 0) {
         // Fork failed
-        perror("fork failed");
+        perror(RED "fork failed" RESET);
         exit(1);
     } else if (pid == 0) {
         // Child process
         execvp(argv[0], argv); // Replace child process with argv
         
         // execvp only returns on failure
-        perror("exec failed");
+        perror(RED "exec failed" RESET);
         exit(1);
     } else {
         // Parent process
-        childPID = pid;
-        printf("Executing... pid: %d\n", childPID);
         wait(NULL); // Wait for the child to finish
     }
 }
 
 
-
-
-void main2() {
-	char* input = (char*)malloc(STRING_LEN * sizeof(char));
-
-	 // Register the signal handler for SIGTSTP (Ctrl+Z)
-    if (signal(SIGTSTP, sigtstp_handler) == SIG_ERR) {
-        perror("Error setting signal handler");
-        exit(1);
-    }
-
-	do {
-		printf(">");
-	
-		fgets(input, STRING_LEN, stdin);
-
-		//removes all `\n` and `\t`
-		for (int i=0; i<strlen(input); ++i) {
-			if (input[i] == '\n' || input[i] == '\t')
-				input[i] = '\0';
-		}
-
-		char** argv = (char**)malloc(ARGV_SIZE * sizeof(char**));
-
-		// split the input into a vector of strings
-		int argvSize = split(argv, input);
-
-		parseCommand(argv, argvSize);
-
-		//free everything
-		for (int i=0; i<argvSize; ++i) {
-			free(argv[i]);
-		}
-
-	} while (true);
-
-}
-
-
-
-
-
 int main() {
-	printf("Welcome to SimpleShell!\nThis is a simple unix-like shell. Type `help` for a list of commands.\n");
+	printf(YELLOW "Welcome to SimpleShell!\nThis is a simple unix-like shell. Type `help` for a list of commands.\n" RESET);
 	char* input = (char*)malloc(STRING_LEN * sizeof(char));
-
-
-	 // Register the signal handler for SIGTSTP (Ctrl+Z)
-    if (signal(SIGTSTP, sigtstp_handler) == SIG_ERR) {
-        perror("Error setting signal handler");
-        exit(1);
-    }
-
 
 
 	do {
