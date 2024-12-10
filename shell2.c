@@ -111,6 +111,24 @@ void list_directory() {
     closedir(dir);
 }
 
+
+
+void cat(const char* filename) {
+	FILE *file = fopen(filename, "r");  // Open the file in read mode
+    if (file == NULL) {
+        perror("Error opening file");
+        return;
+    }
+
+    int ch;
+    // Read each character and print it
+    while ((ch = fgetc(file)) != EOF) {
+        putchar(ch);
+    }
+
+    fclose(file);  // Close the file
+}
+
 void forkWriterReader(char** argvWriter, int argvSizeWriter, char** argvReader, int argvSizeReader) {
 	int pipefd[2];
     pid_t pid1, pid2;
@@ -475,6 +493,11 @@ void parseCommand(char** argv, int argvSize) {
 
 	if (strcmp(argv[0], "ls") == 0) {
 		list_directory();
+		return;
+	}
+
+	if (strcmp(argv[0], "cat") == 0) {
+		cat(argv[1]);
 		return;
 	}
 
