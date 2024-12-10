@@ -6,6 +6,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <stdbool.h>
+#include <dirent.h> 
 #include <fcntl.h>
 
 // Define ANSI color codes
@@ -87,6 +88,28 @@ int split(char** argv, char* str) {
 }
 
 
+void list_directory() {
+    DIR *dir;
+    struct dirent *entry;
+
+    // Open the current directory (".")
+    dir = opendir(".");
+    if (dir == NULL) {
+        perror("opendir");
+        return;
+    }
+
+    // Read and print each directory entry
+    while ((entry = readdir(dir)) != NULL) {
+        // Ignore the "." and ".." directories
+        if (strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0) {
+            printf("%s\n", entry->d_name);
+        }
+    }
+
+    // Close the directory
+    closedir(dir);
+}
 
 void forkWriterReader(char** argvWriter, int argvSizeWriter, char** argvReader, int argvSizeReader) {
 	int pipefd[2];
@@ -393,7 +416,7 @@ void executeInputRedirection(char** argv, int argvSize) {
 		}
 	}
 
-	printf(RED "Sorry, for redirecting output to files, the `>` must be in between spaces.\n" RESET);
+	printf(RED "Sorry, for redirecting input to files, the `<` must be in between spaces.\n" RESET);
 	return;
 }
 
@@ -450,12 +473,16 @@ void parseCommand(char** argv, int argvSize) {
 		return;
 	}
 
+	if (strcmp(argv[0], "ls") == 0) {
+		list_directory();
+		return;
+	}
+
 
 	//check if it's a help command
 	if (strcmp(argv[0], "help") == 0) {
-		printf(MAGENTA "This is a simple unix-like shell written in c for my RCOS project. It is meant for educational purposes. You can execute all the usual usr/bin binaries (ie `ls -l`). Also you can pipe two processes with `(process1) | (process2)` (but make sure the `|` is between two spaces). Type `end` to close the shell. And use `man` for everything else.\n" RESET);
+		printf(MAGENTA "This is a simple unix-like shell written in c for my RCOS project. It is meant for educational purposes. You can execute all the usual usr/bin binaries (ie `ls -l`). Also you can pipe two processes with `(process1) | (process2)` (but make sure the `|` is between two spaces). There is input redirection to files with `(process1) < (file)`, and output redirection to files with `(process1) > (file)` Type `end` to close the shell. And use `man` for everything else.\n" RESET);
 		return;
-	
 	}
 
 	//check if it's an end
