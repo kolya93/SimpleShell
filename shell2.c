@@ -159,6 +159,45 @@ void move_file_to_directory(const char *src, const char *dest_dir) {
 
 
 
+void copy_file_to_directory(const char *file_name, const char *dir_name) {
+    FILE *source, *destination;
+    char dest_file_path[1024];  // Buffer for the destination file path
+    size_t n;
+
+    // Open the source file
+    source = fopen(file_name, "rb");
+    if (source == NULL) {
+        perror("Error opening source file");
+        return;
+    }
+
+    // Construct the full destination file path
+    snprintf(dest_file_path, sizeof(dest_file_path), "%s/%s", dir_name, file_name);
+
+    // Open the destination file
+    destination = fopen(dest_file_path, "wb");
+    if (destination == NULL) {
+        perror("Error opening destination file");
+        fclose(source);
+        return;
+    }
+
+    // Copy data from source to destination
+    while ((n = fread(dest_file_path, 1, sizeof(dest_file_path), source)) > 0) {
+        if (fwrite(dest_file_path, 1, n, destination) != n) {
+            perror("Error writing to destination file");
+            fclose(source);
+            fclose(destination);
+            return;
+        }
+    }
+
+
+    // Close the files
+    fclose(source);
+    fclose(destination);
+}
+
 void forkWriterReader(char** argvWriter, int argvSizeWriter, char** argvReader, int argvSizeReader) {
 	int pipefd[2];
     pid_t pid1, pid2;
@@ -532,14 +571,32 @@ void parseCommand(char** argv, int argvSize) {
 	}
 
 	if (strcmp(argv[0], "move") == 0) {
-		if (argvSize != 3) 
-			printf(RED "move requires 2 a source and a dest\n" RESET);
-		
+		if (argvSize != 3)
+			printf(RED "move requires 2 arguments a source and a dest\n" RESET);
+
 		move_file_to_directory(argv[1], argv[2]);
 		return;
 	}
 
+	if (strcmp(argv[0], "rm") == 0) {
+		if (argvSize != 2)
+			printf(RED "move requires 1 argument: (file to remove)\n" RESET);
+		
+		if (remove(argv[1]) != 0) {
+            perror(argv[1]);  // Print an error if the file couldn't be removed
+        } else {
+            printf("Successfully removed %s\n", argv[1]);  // Notify if file is deleted
+        }
+        return;	
+	}
 
+	if (strcmp(argv[0], "cp") == 0) {
+		if (argvSize != 3) 
+			printf(RED "cp requires 2 arguments: (source) (destination)\n" RESET);
+		
+		copy_file_to_directory(argv[1], argv[2]);
+		return;
+	}
 
 	//check if it's a help command
 	if (strcmp(argv[0], "help") == 0) {
@@ -547,12 +604,10 @@ void parseCommand(char** argv, int argvSize) {
 		return;
 	}
 
-
 	//check if it's an end
 	if (strcmp(argv[0], "end") == 0) {
 		exit(0);
 	}
-
 
 	//just fork into the the process specified
 	pid_t pid = fork();
