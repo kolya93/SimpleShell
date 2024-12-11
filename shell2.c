@@ -129,6 +129,36 @@ void cat(const char* filename) {
     fclose(file);  // Close the file
 }
 
+
+void move_file_to_directory(const char *src, const char *dest_dir) {
+    char dest[1024];  // Buffer to store destination path
+
+    // Ensure the source file exists
+    if (access(src, F_OK) == -1) {
+        perror("Source file does not exist");
+        exit(1);
+    }
+
+    // Ensure the destination directory exists
+    if (access(dest_dir, F_OK) == -1 || access(dest_dir, R_OK | X_OK) == -1) {
+        perror("Destination directory does not exist or is not accessible");
+        exit(1);
+    }
+
+    // Concatenate destination directory and file name
+    snprintf(dest, sizeof(dest), "%s/%s", dest_dir, strrchr(src, '/') ? strrchr(src, '/') + 1 : src);
+
+    // Attempt to rename (move) the file
+    if (rename(src, dest) == 0) {
+        printf("Moved file '%s' to '%s'\n", src, dest);
+    } else {
+        perror("Error moving file");
+        exit(1);
+    }
+}
+
+
+
 void forkWriterReader(char** argvWriter, int argvSizeWriter, char** argvReader, int argvSizeReader) {
 	int pipefd[2];
     pid_t pid1, pid2;
@@ -501,6 +531,15 @@ void parseCommand(char** argv, int argvSize) {
 		return;
 	}
 
+	if (strcmp(argv[0], "move") == 0) {
+		if (argvSize != 3) 
+			printf(RED "move requires 2 a source and a dest\n" RESET);
+		
+		move_file_to_directory(argv[1], argv[2]);
+		return;
+	}
+
+
 
 	//check if it's a help command
 	if (strcmp(argv[0], "help") == 0) {
@@ -508,10 +547,12 @@ void parseCommand(char** argv, int argvSize) {
 		return;
 	}
 
+
 	//check if it's an end
 	if (strcmp(argv[0], "end") == 0) {
 		exit(0);
 	}
+
 
 	//just fork into the the process specified
 	pid_t pid = fork();
